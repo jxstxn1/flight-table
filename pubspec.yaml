@@ -1,0 +1,28 @@
+name: office_flight_table
+description: "A new Flutter project."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flip_board: ^1.0.0
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.4.0
+  socket_io_client: ^2.0.3+1
+
+dev_dependencies:
+  custom_lint: ^0.7.6
+  flutter_test:
+    sdk: flutter
+  lint: ^2.8.0
+  riverpod_lint: ^2.6.5
+
+flutter:
+  uses-material-design: true
+
+# Platform support
+flutter_platforms:
+  - linux
