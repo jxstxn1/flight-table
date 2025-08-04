@@ -173,11 +173,6 @@ function FlightRow({ flight, index }: { flight: FlightStatus; index: number }) {
               Entry in: {formatTime(timeToEntry)}
             </div>
           )}
-        {flight.state === "Visible" && flight.estimatedExitTime && (
-          <div className="text-xs text-green-300 mt-1">
-            Exit in: {formatTime(timeToExit || 0)}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -281,12 +276,28 @@ export default function AirportBoard({ token }: AirportBoardProps) {
       // Log the state change for debugging
       console.log(`State change: ${callSign} ${previousState} → ${newState}`);
 
+      // Enhanced debugging for Visible → Passed transitions
+      if (previousState === "Visible" && newState === "Passed") {
+        console.log("🔴 VISIBLE → PASSED transition detected!");
+        console.log("Aircraft ID:", aircraftId);
+        console.log(
+          "Current flights:",
+          flights.map((f) => ({
+            icao24: f.icao24,
+            callSign: f.callSign,
+            state: f.state,
+          }))
+        );
+      }
+
       // Apply optimistic update
       setFlights((prevFlights) => {
+        console.log("Before state update - flights:", prevFlights.length);
+
         const updatedFlights = prevFlights.map((flight) => {
           if (flight.icao24 === aircraftId) {
             console.log(
-              `Updating aircraft ${callSign} state from ${flight.state} to ${newState}`
+              `✅ Updating aircraft ${callSign} state from ${flight.state} to ${newState}`
             );
             return {
               ...flight,
@@ -296,6 +307,25 @@ export default function AirportBoard({ token }: AirportBoardProps) {
           }
           return flight;
         });
+
+        // Check if any aircraft was actually updated
+        const wasUpdated = updatedFlights.some(
+          (flight, index) => flight.state !== prevFlights[index]?.state
+        );
+
+        if (!wasUpdated) {
+          console.log(
+            `❌ No aircraft found with ID ${aircraftId} for ${callSign}`
+          );
+          console.log(
+            "Available aircraft IDs:",
+            prevFlights.map((f) => f.icao24)
+          );
+        } else {
+          console.log(
+            `✅ Successfully updated aircraft ${callSign} to ${newState}`
+          );
+        }
 
         return updatedFlights;
       });
