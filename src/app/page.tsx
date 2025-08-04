@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AirportBoard from "./components/airport-board";
 
-export default function Page() {
+function TokenHandler() {
   const searchParams = useSearchParams();
   const [isValidToken, setIsValidToken] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -35,9 +35,24 @@ export default function Page() {
     );
   }
 
+  return <AirportBoard token={token} />;
+}
+
+export default function Page() {
   return (
-    <div>
-      <AirportBoard token={token} />
-    </div>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-yellow-400 text-xl mb-4">Loading...</div>
+            <div className="text-gray-400 text-sm">
+              Initializing application
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <TokenHandler />
+    </Suspense>
   );
 }
