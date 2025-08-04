@@ -4,33 +4,43 @@ import { io, Socket } from "socket.io-client";
 export interface FlightDataUpdate {
   flightData: {
     headers: Array<{ [key: string]: string }>;
-    data: EnhancedFlightStatus[];
+    data: FlightStatus[];
   };
 }
 
-export interface EnhancedFlightStatus {
-  icao24: string;
-  state: "Incoming" | "Visible" | "Passed";
-  callSign: string;
-  origin: string;
-  destination: string;
-  aircraft: string;
-  aircraftType?: string;
-  operator?: string;
-  registration?: string;
-  distance?: number;
-  estimatedTimeToIntersection?: number;
+export interface StateChangeEvent {
+  type: 'stateChange';
+  data: {
+    aircraftId: string;
+    previousState: string | null;
+    newState: string;
+    callSign: string;
+    timestamp: number;
+  };
+}
 
-  // Enhanced prediction fields
-  estimatedEntryTime?: number;
-  estimatedExitTime?: number | null;
-  heading?: number;
-  speed?: number;
-  lastUpdated?: number;
+export interface FlightStatus {
+  // REQUIRED fields (always present):
+  icao24: string; // Aircraft identifier
+  state: "Incoming" | "Visible" | "Passed"; // Current state
+  callSign: string; // Flight callsign
+  origin: string; // Origin airport
+  destination: string; // Destination airport
+  aircraft: string; // Aircraft identifier
+  distance?: number; // Distance to office (km)
+  estimatedTimeToIntersection?: number; // Time to intersection (seconds)
+  heading?: number; // Aircraft heading (degrees)
+  speed?: number; // Aircraft speed (m/s)
+  lastUpdated?: number; // Timestamp
+  isPrediction?: boolean; // Always false for real data
+  dataHash?: string; // Unique hash for change detection
 
-  // Frontend expected fields
-  isPrediction?: boolean;
-  dataHash?: string;
+  // OPTIONAL fields (may be undefined):
+  aircraftType?: string; // Aircraft type
+  operator?: string; // Airline operator
+  registration?: string; // Aircraft registration
+  estimatedEntryTime?: number; // Predicted entry time
+  estimatedExitTime?: number | null; // Predicted exit time
 }
 
 export interface AuthenticationResponse {
@@ -160,6 +170,15 @@ class WebSocketService {
 
     this.socket.on("flightData", (data: FlightDataUpdate) => {
       console.log("Received flight data update:", data);
+      callback(data);
+    });
+  }
+
+  public onStateChange(callback: (data: StateChangeEvent) => void) {
+    if (!this.socket) return;
+
+    this.socket.on("stateChange", (data: StateChangeEvent) => {
+      console.log("Received state change event:", data);
       callback(data);
     });
   }

@@ -4,14 +4,10 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   websocketService,
-  type EnhancedFlightStatus,
+  type FlightStatus,
   type FlightDataUpdate,
+  type StateChangeEvent,
 } from "@/lib/websocket";
-
-interface Flight extends Omit<EnhancedFlightStatus, "state"> {
-  // Use the original state from the backend
-  state: "Incoming" | "Visible" | "Passed";
-}
 
 const CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-";
 
@@ -77,8 +73,8 @@ function FlipText({ text, delay = 0 }: FlipTextProps) {
   );
 }
 
-function FlightRow({ flight, index }: { flight: Flight; index: number }) {
-  const getStateColor = (state: Flight["state"]) => {
+function FlightRow({ flight, index }: { flight: FlightStatus; index: number }) {
+  const getStateColor = (state: FlightStatus["state"]) => {
     switch (state) {
       case "Incoming":
         return "text-yellow-400";
@@ -193,7 +189,7 @@ interface AirportBoardProps {
 
 export default function AirportBoard({ token }: AirportBoardProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const [flights, setFlights] = useState<FlightStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState({
     isConnected: false,
     isAuthenticated: false,
@@ -218,20 +214,92 @@ export default function AirportBoard({ token }: AirportBoardProps) {
       }));
     });
 
-    // Listen for flight data updates
+    // Listen for flight data updates (full sync every 15 seconds)
     websocketService.onFlightData((data: FlightDataUpdate) => {
       console.log("Received flight data update:", data);
 
-      // Use the original flight data without state transformation
-      const transformedFlights: Flight[] = data.flightData.data.map(
-        (flight) => ({
-          ...flight,
-          // Keep the original state from the backend
-          state: flight.state,
-        })
-      );
+      // Validate and transform the flight data
+      try {
+        let flightData = data?.flightData?.data;
+        console.log("flightData.data:", flightData);
+        console.log("flightData.data type:", typeof flightData);
+        console.log("flightData.data is array:", Array.isArray(flightData));
 
-      setFlights(transformedFlights);
+        // Handle different possible data structures
+        if (!flightData) {
+          // Try alternative data structures
+          if (Array.isArray(data)) {
+            console.log("Data is directly an array, using as flight data");
+            flightData = data as FlightStatus[];
+          } else {
+            const dataAsUnknown = data as unknown as Record<string, unknown>;
+            if (dataAsUnknown?.data && Array.isArray(dataAsUnknown.data)) {
+              console.log(
+                "Data has direct 'data' property, using as flight data"
+              );
+              flightData = dataAsUnknown.data as FlightStatus[];
+            } else if (
+              dataAsUnknown?.flights &&
+              Array.isArray(dataAsUnknown.flights)
+            ) {
+              console.log("Data has 'flights' property, using as flight data");
+              flightData = dataAsUnknown.flights as FlightStatus[];
+            } else {
+              console.error("No valid flight data found in:", data);
+              return;
+            }
+          }
+        }
+
+        if (!Array.isArray(flightData)) {
+          console.error("Invalid flight data structure:", data);
+          console.error(
+            "Expected flight data to be an array, got:",
+            typeof flightData
+          );
+          return;
+        }
+
+        console.log("Final flight data:", flightData);
+        console.log("Number of flights:", flightData.length);
+
+        // Use the flight data directly since it matches our interface
+        setFlights(flightData);
+        setLastUpdateTime(Date.now());
+      } catch (error) {
+        console.error("Error processing flight data:", error);
+      }
+    });
+
+    // Listen for state change events (immediate optimistic updates)
+    websocketService.onStateChange((stateChange: StateChangeEvent) => {
+      console.log("Received state change event:", stateChange);
+
+      const { aircraftId, previousState, newState, callSign, timestamp } =
+        stateChange.data;
+
+      // Log the state change for debugging
+      console.log(`State change: ${callSign} ${previousState} → ${newState}`);
+
+      // Apply optimistic update
+      setFlights((prevFlights) => {
+        const updatedFlights = prevFlights.map((flight) => {
+          if (flight.icao24 === aircraftId) {
+            console.log(
+              `Updating aircraft ${callSign} state from ${flight.state} to ${newState}`
+            );
+            return {
+              ...flight,
+              state: newState as FlightStatus["state"],
+              lastUpdated: timestamp,
+            };
+          }
+          return flight;
+        });
+
+        return updatedFlights;
+      });
+
       setLastUpdateTime(Date.now());
     });
 
@@ -250,7 +318,7 @@ export default function AirportBoard({ token }: AirportBoardProps) {
     return () => clearInterval(timer);
   }, []);
 
-  const sortFlightsByState = (flights: Flight[]) => {
+  const sortFlightsByState = (flights: FlightStatus[]) => {
     const stateOrder = { Visible: 0, Incoming: 1, Passed: 2 };
     return [...flights].sort(
       (a, b) => stateOrder[a.state] - stateOrder[b.state]
